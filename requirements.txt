@@ -1,4 +1,5 @@
 aiogram>=3.5.0
 aiomysql
+aiosqlite
 cryptography
 python-dotenv

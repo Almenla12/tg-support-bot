@@ -17,8 +17,15 @@ GROUP_ID = int(os.getenv("GROUP_ID", "0"))
 ADMIN_USERS_LIST = os.getenv("ADMIN_USERS_LIST", "")
 ADMIN_USERS = {int(uid.strip()) for uid in ADMIN_USERS_LIST.split(',') if uid.strip().isdigit()}
 
-# --- MySQL Database (Primary bot database) ---
-DB_HOST = os.getenv("DB_HOST")
-DB_USER = os.getenv("DB_USER")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
-DB_NAME = os.getenv("DB_NAME")
+# --- Database Selection (MySQL or SQLite) ---
+# Set to 'mysql' or 'sqlite'
+DB_TYPE = os.getenv("DB_TYPE", "sqlite").lower()
+
+# MySQL Database Configuration
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_USER = os.getenv("DB_USER", "root")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "")
+DB_NAME = os.getenv("DB_NAME", "support_bot")
+
+# SQLite Database Configuration
+SQLITE_DB_PATH = os.getenv("SQLITE_DB_PATH", "bot_database.db")

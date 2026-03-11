@@ -5,14 +5,14 @@ A lightweight and efficient Telegram Support Bot built with `aiogram 3.x`. It us
 ## Features
 
 -   **Topic-based Tickets:** Every user gets a unique topic in a Telegram Forum group.
+-   **Database Flexibility:** Supports both **SQLite** (local file) and **MySQL**.
 -   **Bi-directional Communication:** Support agents reply directly in the topic, and the message is forwarded to the user.
 -   **Edit Support:** When a user edits their message, the bot notifies the support group and forwards the updated content.
--   **MySQL Persistence:** Remembers the mapping between users and topics.
 
 ## Prerequisites
 
 -   Python 3.9+
--   MySQL Database
+-   MySQL (optional, SQLite is used by default)
 -   A Telegram Bot token (from [@BotFather](https://t.me/BotFather))
 -   A Telegram Group with **Topics** enabled.
 
@@ -31,8 +31,8 @@ A lightweight and efficient Telegram Support Bot built with `aiogram 3.x`. It us
 
 3.  **Configure the bot:**
     -   Copy `.env.example` to `.env`.
-    -   Fill in your `BOT_TOKEN`, `GROUP_ID`, and database credentials.
-    -   `GROUP_ID` is the ID of your support group (where topics will be created).
+    -   Fill in your `BOT_TOKEN` and `GROUP_ID`.
+    -   Choose your database by setting `DB_TYPE` to `sqlite` or `mysql`.
 
 4.  **Run the bot:**
     ```bash

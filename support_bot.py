@@ -2,9 +2,10 @@
 import asyncio
 import logging
 import sys
-from contextlib import suppress
+from contextlib import suppress, asynccontextmanager
 
 import aiomysql
+import aiosqlite
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -21,6 +22,20 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # --- Global variables for database pools ---
 db_pool = None
 
+# --- Database context manager ---
+@asynccontextmanager
+async def get_db_connection():
+    """Provides an asynchronous database connection (MySQL or SQLite)."""
+    if config.DB_TYPE == "mysql":
+        async with db_pool.acquire() as conn:
+            async with conn.cursor() as cursor:
+                yield cursor
+    else:  # SQLite
+        async with aiosqlite.connect(config.SQLITE_DB_PATH) as conn:
+            async with conn.cursor() as cursor:
+                yield cursor
+                await conn.commit()
+
 # --- Aiogram routers initialization ---
 private_router = Router()
 group_router = Router()
@@ -28,68 +43,67 @@ commands_router = Router()
 
 
 # === Database helper functions (user_topics) ===
-async def initialize_db_pools():
-    """Initializes the database connection pool."""
+async def initialize_db():
+    """Initializes the database connection (pool for MySQL, file for SQLite)."""
     global db_pool
     try:
-        db_pool = await aiomysql.create_pool(
-            host=config.DB_HOST, user=config.DB_USER, password=config.DB_PASSWORD,
-            db=config.DB_NAME, autocommit=True, loop=asyncio.get_running_loop()
-        )
-        logging.info("Main DB connection pool created successfully.")
+        if config.DB_TYPE == "mysql":
+            db_pool = await aiomysql.create_pool(
+                host=config.DB_HOST, user=config.DB_USER, password=config.DB_PASSWORD,
+                db=config.DB_NAME, autocommit=True, loop=asyncio.get_running_loop()
+            )
+            logging.info("Main MySQL connection pool created successfully.")
+        else:
+            logging.info(f"Using SQLite database at {config.SQLITE_DB_PATH}")
+        
+        # Initialize tables
+        async with get_db_connection() as cursor:
+            # Table structure is compatible with both MySQL and SQLite
+            await cursor.execute("""
+                CREATE TABLE IF NOT EXISTS user_topics (
+                    user_id BIGINT PRIMARY KEY, 
+                    topic_id BIGINT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            logging.info("Check/Creation of 'user_topics' table completed.")
         return True
     except Exception as e:
-        logging.critical(f"Failed to create DB connection pool: {e}")
+        logging.critical(f"Failed to initialize database: {e}")
         return False
 
 
-async def initialize_database_tables():
-    """Checks and creates necessary tables in the bot's database."""
-    async with db_pool.acquire() as conn:
-        async with conn.cursor() as cursor:
-            try:
-                await cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS user_topics (
-                        user_id BIGINT PRIMARY KEY, topic_id BIGINT NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                        INDEX idx_topic_id (topic_id)
-                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-                """)
-                logging.info("Check/Creation of 'user_topics' table completed.")
-                return True
-            except Exception as e:
-                logging.error(f"Error initializing 'user_topics' table: {e}")
-                return False
-
-
 async def get_topic_id_for_user(user_id: int) -> int | None:
-    async with db_pool.acquire() as conn:
-        async with conn.cursor() as cursor:
-            await cursor.execute("SELECT topic_id FROM user_topics WHERE user_id = %s", (user_id,))
-            result = await cursor.fetchone()
-            return result[0] if result else None
+    async with get_db_connection() as cursor:
+        await cursor.execute("SELECT topic_id FROM user_topics WHERE user_id = %s" if config.DB_TYPE == "mysql" else "SELECT topic_id FROM user_topics WHERE user_id = ?", (user_id,))
+        result = await cursor.fetchone()
+        return result[0] if result else None
 
 
 async def get_user_id_for_topic(topic_id: int) -> int | None:
-    async with db_pool.acquire() as conn:
-        async with conn.cursor() as cursor:
-            await cursor.execute("SELECT user_id FROM user_topics WHERE topic_id = %s", (topic_id,))
-            result = await cursor.fetchone()
-            return result[0] if result else None
+    async with get_db_connection() as cursor:
+        await cursor.execute("SELECT user_id FROM user_topics WHERE topic_id = %s" if config.DB_TYPE == "mysql" else "SELECT user_id FROM user_topics WHERE topic_id = ?", (topic_id,))
+        result = await cursor.fetchone()
+        return result[0] if result else None
 
 
 async def save_user_topic_mapping(user_id: int, topic_id: int) -> bool:
-    async with db_pool.acquire() as conn:
-        async with conn.cursor() as cursor:
-            try:
+    async with get_db_connection() as cursor:
+        try:
+            if config.DB_TYPE == "mysql":
                 query = "INSERT INTO user_topics (user_id, topic_id) VALUES (%s, %s) ON DUPLICATE KEY UPDATE topic_id = VALUES(topic_id);"
                 await cursor.execute(query, (user_id, topic_id))
-                logging.info(f"DB: Link user_id {user_id} -> topic_id {topic_id} saved/updated.")
-                return True
-            except Exception as e:
-                logging.error(f"DB Error: save_user_topic_mapping({user_id}, {topic_id}): {e}")
-                return False
+            else:
+                # SQLite syntax for UPSERT (Replace)
+                query = "INSERT OR REPLACE INTO user_topics (user_id, topic_id, created_at, last_updated) VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);"
+                await cursor.execute(query, (user_id, topic_id))
+            
+            logging.info(f"DB: Link user_id {user_id} -> topic_id {topic_id} saved/updated.")
+            return True
+        except Exception as e:
+            logging.error(f"DB Error: save_user_topic_mapping({user_id}, {topic_id}): {e}")
+            return False
 
 
 # --- Command Handlers (commands_router) ---
@@ -210,9 +224,7 @@ async def handle_edited_topic_message(message: Message, bot: Bot):
 
 # --- Main entry point ---
 async def main():
-    if not await initialize_db_pools():
-        sys.exit(1)
-    if not await initialize_database_tables():
+    if not await initialize_db():
         sys.exit(1)
 
     bot = Bot(token=config.BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
