@@ -1,11 +1,13 @@
 # support_bot.py
 import asyncio
 import logging
+import os
 import sys
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiohttp import web
 
 import config
 from database.db import initialize_db, close_db
@@ -14,10 +16,27 @@ from handlers import commands, private, group
 # --- Logging setup ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+
+# --- Web server for Render (keep-alive) ---
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get("/", lambda r: web.Response(text="Bot is running"))
+    app.router.add_get("/health", lambda r: web.Response(text="OK"))
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 10000))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    logging.info(f"✅ Web server started on port {port}")
+
+
 async def main():
     # Initialize Database
     if not await initialize_db():
         sys.exit(1)
+
+    # Start web server (Render needs an open port)
+    await start_web_server()
 
     # Initialize Bot and Dispatcher
     bot = Bot(token=config.BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
@@ -37,6 +56,7 @@ async def main():
         logging.info("Stopping bot...")
         await close_db()
         await bot.session.close()
+
 
 if __name__ == '__main__':
     try:
