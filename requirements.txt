@@ -3,3 +3,4 @@ aiomysql
 aiosqlite
 cryptography
 python-dotenv
+Flask
