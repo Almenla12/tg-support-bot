@@ -1,6 +1,7 @@
 # database/db.py
 import asyncio
 import logging
+import ssl
 from contextlib import asynccontextmanager
 
 import aiomysql
@@ -28,9 +29,20 @@ async def initialize_db():
     global db_pool
     try:
         if config.DB_TYPE == "mysql":
+            # Create SSL context for Aiven
+            ssl_context = ssl.create_default_context(cafile="ca.pem")
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+
             db_pool = await aiomysql.create_pool(
-                host=config.DB_HOST, user=config.DB_USER, password=config.DB_PASSWORD,
-                db=config.DB_NAME, autocommit=True, loop=asyncio.get_running_loop()
+                host=config.DB_HOST,
+                port=int(config.DB_PORT),
+                user=config.DB_USER,
+                password=config.DB_PASSWORD,
+                db=config.DB_NAME,
+                ssl=ssl_context,
+                autocommit=True,
+                loop=asyncio.get_running_loop()
             )
             logging.info("Main MySQL connection pool created successfully.")
         else:
