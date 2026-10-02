@@ -26,6 +26,7 @@ DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_USER = os.getenv("DB_USER", "root")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "")
 DB_NAME = os.getenv("DB_NAME", "support_bot")
+DB_PORT = os.getenv("DB_PORT", "3306")
 
 # SQLite Database Configuration
 SQLITE_DB_PATH = os.getenv("SQLITE_DB_PATH", "bot_database.db")
