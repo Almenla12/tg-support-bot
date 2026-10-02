@@ -10,5 +10,5 @@ router = Router()
 async def handle_start(message: Message):
     logging.info(f"User {message.from_user.id} ({message.from_user.full_name}) sent /start")
     welcome_text = (
-        "مرحبًا بك في بوت التواصل \n الرجاء ارسال كافة التفاصيل وسيتم التصحيح في اقرب وقت ممكن")
+        "مرحبًا بك في بوت التواصل \n\nالرجاء ارسال كافة التفاصيل وسيتم التصحيح في اقرب وقت ممكن")
     await message.answer(welcome_text)
