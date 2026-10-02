@@ -82,7 +82,7 @@ async def save_user_topic_mapping(user_id: int, topic_id: int) -> bool:
     async with get_db_connection() as cursor:
         try:
             if config.DB_TYPE == "mysql":
-                query = "INSERT INTO user_topics (user_id, topic_id) VALUES (%s, %s) ON DUPLICATE KEY UPDATE topic_id = VALUES(topic_id);"
+                query = "INSERT INTO user_topics (user_id, topic_id) VALUES (%s, %s) AS new ON DUPLICATE KEY UPDATE topic_id = new.topic_id;"
                 await cursor.execute(query, (user_id, topic_id))
             else:
                 query = "INSERT OR REPLACE INTO user_topics (user_id, topic_id, created_at, last_updated) VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);"
