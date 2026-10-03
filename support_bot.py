@@ -23,8 +23,16 @@ async def start_web_server():
     app.router.add_get("/", lambda r: web.Response(text="Bot is running"))
     app.router.add_get("/health", lambda r: web.Response(text="OK"))
 
-    # Route لإبقاء Aiven نشطة (SELECT 1)
+    # Route لإبقاء Aiven نشطة (SELECT 1) — محمي بـ Token سري
     async def db_ping(request):
+        # تحقق من الـ Token السري (بالـ Header أو Query Parameter)
+        secret = request.headers.get("X-DB-Ping-Secret") or request.query.get("secret")
+        expected = os.environ.get("DB_PING_SECRET", "")
+
+        if not expected or secret != expected:
+            logging.warning(f"Unauthorized /db-ping attempt from {request.remote}")
+            return web.Response(text="Unauthorized", status=401)
+
         try:
             async with get_db_connection() as cursor:
                 await cursor.execute("SELECT 1")
