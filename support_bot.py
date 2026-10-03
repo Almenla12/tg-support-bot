@@ -10,7 +10,7 @@ from aiogram.enums import ParseMode
 from aiohttp import web
 
 import config
-from database.db import initialize_db, close_db
+from database.db import initialize_db, close_db, get_db_connection
 from handlers import commands, private, group
 
 # --- Logging setup ---
@@ -22,6 +22,20 @@ async def start_web_server():
     app = web.Application()
     app.router.add_get("/", lambda r: web.Response(text="Bot is running"))
     app.router.add_get("/health", lambda r: web.Response(text="OK"))
+
+    # Route لإبقاء Aiven نشطة (SELECT 1)
+    async def db_ping(request):
+        try:
+            async with get_db_connection() as cursor:
+                await cursor.execute("SELECT 1")
+                await cursor.fetchone()
+            return web.Response(text="DB is alive")
+        except Exception as e:
+            logging.error(f"DB ping error: {e}")
+            return web.Response(text=f"DB error: {e}", status=500)
+
+    app.router.add_get("/db-ping", db_ping)
+
     runner = web.AppRunner(app)
     await runner.setup()
     port = int(os.environ.get("PORT", 10000))
